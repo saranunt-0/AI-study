@@ -90,14 +90,22 @@
 3. **Loss.** Teacher-forced prediction + multi-step open-loop rollout + `λ·SIGReg(z)`. `--objective recon` swaps SIGReg for pixel reconstruction (the Dreamer / World Models route) so you can compare the two.
 4. **Inference.** `plan.py` encodes the goal image, runs CEM over action sequences in latent space, executes the first action, and re-plans (MPC).
 
-**Results from one CPU run** (400 steps, ~95 s, λ = 1; your numbers will vary):
+**Results with the default command** (2,000 steps on CPU, λ = 1; your numbers will vary slightly):
 
 | Metric | Value |
 |---|---|
-| Linear-probe R² of the true (x, y) from `z` | 0.999 |
-| Open-loop latent error after 16 steps (normalised) | 0.10 |
-| Planning success, random goals | CEM 100% · greedy oracle 70% · random 10% |
-| Planning success, goal in the other room | CEM 100% · greedy oracle 70% · random 0% |
+| Linear-probe R² of the true (x, y) from `z` | 0.998 |
+| Open-loop latent error after 1 / 4 / 8 / 16 steps (normalised by latent variance) | 0.001 / 0.008 / 0.019 / 0.058 |
+| Planning success, random goals (20 episodes) | CEM **100%** · greedy oracle 80% · random 5% |
+| Planning success, goal in the other room (20 episodes) | CEM **100%** · greedy oracle 65% · random 0% |
+
+![Imagination](assets/world_model_imagination.png)
+
+*Odd rows are real frames; even rows are decoded open-loop predictions from frame 0 and the action sequence. Rows 5–6 go through the door correctly. In rows 7–8 the model predicts sliding along the wall where the real agent stays put: compounding error, visible.*
+
+![Planning](assets/world_model_plan_cross_room.png)
+
+*CEM + MPC with a goal image in the other room. Each row is one episode (10 frames); the last column is the goal.*
 
 The first version of this code used λ = 0.1 with a mean-normalised SIGReg and **collapsed**: SIGReg stuck at 0.40 and probe R² ≈ 0 while the prediction loss looked "excellent" (1e-7). That is the textbook JEPA failure. A tiny prediction loss is *not* evidence of a good world model, so always log a collapse metric and a probe.
 

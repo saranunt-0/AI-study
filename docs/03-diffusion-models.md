@@ -115,7 +115,25 @@ guidance                    v̂ = v_uncond + w · (v_cond − v_uncond)     (cla
   - `test_dit_shapes_zero_init_and_sampling` checks that the untrained network outputs exactly zero, which is the adaLN-Zero property.
 - `FlowMatching` contains: logit-normal t, straight-path interpolation, velocity target, v- or x-prediction, Euler/Heun with SD3 time-shift, CFG in one batched forward pass, and trajectory export.
 - `train.py` adds: EMA weights, label dropout (needed for CFG), warmup, gradient clipping, sample grids every `--sample-every` steps.
-- `sample.py --eval --cfg-sweep 1 2 3 5` trains a small classifier on real data and reports **conditional accuracy versus diversity** as a function of guidance. This is the fidelity–diversity trade-off in one table.
+- `sample.py --eval --cfg-sweep 1 2 3 5` trains a small classifier on real data, checks that it is accurate there (it warns below 95%), and reports **conditional accuracy as a function of guidance**.
+
+**Results with the default command** (4,000 steps on CPU, 1.3M-parameter DiT, patch 4, 24 Heun steps):
+
+| CFG scale | 1 | 2 | 3 | 5 |
+|---|---|---|---|---|
+| Conditional accuracy (chance 25%; classifier 100% on real data) | 61% | **70%** | 68% | 59% |
+
+Guidance helps up to a sweet spot, then hurts as samples are pushed off the data manifold (over-saturation). Circles and squares come out clean, but thin triangles and crosses do not at this size. Fine geometry is exactly what patch size (2 vs 4) and model width buy you, as in the DiT paper's scaling plots. Try `--patch-size 2 --d-model 256 --n-layers 8` on a GPU.
+
+![Samples](assets/diffusion_samples.png)
+
+*Rows: circle, square, triangle, cross (CFG 3, EMA weights).*
+
+![Trajectory](assets/diffusion_trajectory.png)
+
+*Denoising trajectories: t = 1 (noise) on the left to t = 0 (data) on the right. Coarse layout and colour are decided early, edges late.*
+
+**A lesson from building this.** The first version of the evaluator scored only 43% on *real* data, which would have made every number above meaningless. Validate the evaluator first.
 
 ## 9. Exercises
 

@@ -1,6 +1,6 @@
 """Train a class-conditional DiT with flow matching on the procedural shapes dataset.
 
-    python -m aistudy.diffusion.train                        # ~5-8 min CPU, v-prediction
+    python -m aistudy.diffusion.train                        # ~10 min CPU, v-prediction
     python -m aistudy.diffusion.train --prediction x         # JiT-style x-prediction
     python -m aistudy.diffusion.sample --ckpt runs/diffusion/last.pt --cfg 3.0
 
@@ -37,10 +37,10 @@ def parse_args(argv=None):
     p.add_argument("--t-sampling", choices=["logit_normal", "uniform"], default="logit_normal")
     p.add_argument("--class-dropout", type=float, default=0.1)
     p.add_argument("--optimizer", choices=["adamw", "muon"], default="adamw")
-    p.add_argument("--lr", type=float, default=5e-4)
+    p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--weight-decay", type=float, default=0.0)
     p.add_argument("--warmup", type=int, default=200)
-    p.add_argument("--steps", type=int, default=3000)
+    p.add_argument("--steps", type=int, default=4000)
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--grad-clip", type=float, default=1.0)
     p.add_argument("--ema", type=float, default=0.999)

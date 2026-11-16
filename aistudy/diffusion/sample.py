@@ -4,10 +4,13 @@
     python -m aistudy.diffusion.sample --ckpt runs/diffusion/last.pt --eval --cfg-sweep 1 2 3 5
     python -m aistudy.diffusion.sample --ckpt runs/diffusion/last.pt --trajectory --out traj.png
 
-``--eval`` trains a small classifier on real data, then reports the fraction of generated
-samples classified as the requested class ("conditional accuracy"). It is the same idea as
-Inception Score / FID: judge a generator through a pretrained recogniser. Watch the classic
-trade-off: higher CFG -> higher accuracy (fidelity) but less diversity (we log pixel std).
+``--eval`` trains a small classifier on real data (and checks it reaches >95% accuracy),
+then reports the fraction of generated samples classified as the requested class
+("conditional accuracy"). Same idea as Inception Score / FID: judge a generator through a
+validated recogniser. Typical result: accuracy rises with guidance up to a sweet spot, then
+falls as samples are pushed off the data manifold (over-saturation). ``pixel std`` is only a
+crude statistic - it also rises with over-saturation, so it is NOT a diversity metric; use
+e.g. pairwise feature distances or recall for diversity.
 """
 
 from __future__ import annotations
@@ -37,10 +40,12 @@ def load(path: str, device, use_ema: bool = True):
     return model.eval(), FlowMatching(FlowConfig(**ckpt["flow_config"]))
 
 
-def train_probe_classifier(data: ShapesDataset, device, steps: int = 300) -> nn.Module:
+def train_probe_classifier(data: ShapesDataset, device, steps: int = 500) -> nn.Module:
+    def block(cin, cout, stride):
+        return [nn.Conv2d(cin, cout, 3, stride, 1), nn.GroupNorm(8, cout), nn.SiLU()]
     clf = nn.Sequential(
-        nn.Conv2d(3, 32, 3, 2, 1), nn.SiLU(), nn.Conv2d(32, 64, 3, 2, 1), nn.SiLU(),
-        nn.Conv2d(64, 64, 3, 2, 1), nn.SiLU(), nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(64, data.num_classes),
+        *block(3, 32, 1), *block(32, 64, 2), *block(64, 64, 1), *block(64, 128, 2), *block(128, 128, 2),
+        nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(128, data.num_classes),
     ).to(device)
     opt = torch.optim.AdamW(clf.parameters(), lr=2e-3)
     gen = torch.Generator().manual_seed(123)
@@ -53,6 +58,8 @@ def train_probe_classifier(data: ShapesDataset, device, steps: int = 300) -> nn.
     x, y = data.sample(1024, device, gen)
     acc = (clf(x).argmax(-1) == y).float().mean().item()
     print(f"probe classifier accuracy on real data: {acc:.3f}")
+    if acc < 0.95:  # an evaluator you have not validated is worse than no evaluator
+        print("WARNING: probe classifier is weak; conditional-accuracy numbers below are unreliable")
     return clf.eval()
 
 

@@ -94,17 +94,27 @@ torchrun --nproc_per_node=2 -m aistudy.llm.train --grad-accum 2 --spike-guard --
 python -m aistudy.llm.train --preset base --data data/mycorpus --dtype bf16 --compile --peak-tflops 989
 ```
 
-### Results from the CPU runs used to validate the code (4 vCPU, no GPU)
+### Results from the default commands (CPU only, 4 vCPU, no GPU)
 
 | Model | Run | Result |
 |---|---|---|
-| LLM (0.9M params, byte-level) | 200 steps, ~20 s | val loss 5.6 → 1.50 nats/byte; KV-cached decoding matches the full forward pass to 4e-7 |
-| LLM MoE (8 experts, top-2) + Muon + WSD | 150 steps | val loss 1.48; expert max/mean load 3.2 → 2.1 via aux-loss-free biases; gradient noise scale grew from ~360 to ~7,300 tokens as loss fell |
-| LLM DDP (2 processes, gloo) | 60 steps | identical code path as multi-GPU; resume continues exactly at the saved step |
-| World model (JEPA + SIGReg, 1.0M params) | 400 steps, ~95 s | probe R² = 0.999; 16-step open-loop error 10% of latent variance; **CEM planning success 100%** (10/10, including cross-room goals) vs 70% greedy oracle and 0–10% random |
-| Diffusion DiT (flow matching) | 3,000 steps | see `docs/03` exercises; circles and squares are clean, thin shapes (crosses) need longer training or a larger model |
+| LLM (0.9M params, byte-level, trained on these docs) | default, 300 steps, 24 s | initial loss 5.575 = ln(264) as expected → val loss **1.90 nats/byte**; KV-cached decoding matches the full forward pass to 4e-7 and is ~2× faster on CPU |
+| LLM MoE (8 experts, top-2) + Muon + WSD (on the repo's Python source) | 150 steps | val loss 1.48; expert max/mean load 3.2 → 2.1 via aux-loss-free biases; gradient noise scale grew from ~360 to ~7,300 tokens as loss fell |
+| LLM DDP (2 processes, gloo) + resume | 60 / 160 steps | same code path as multi-GPU; resume continues exactly at the saved step |
+| World model (JEPA + SIGReg, 1.0M params) | default, 2,000 steps | linear-probe R² **0.998**; 16-step open-loop error **5.8%** of latent variance |
+| World-model planning (CEM + MPC, 20 episodes) | `plan.py --baselines` | **100%** success for random goals (greedy oracle 80%, random 5%) and **100%** for goals in the other room (greedy oracle 65%, random 0%) |
+| Diffusion DiT (flow matching, 1.3M params) | default, 4,000 steps | conditional accuracy judged by a classifier that scores 100% on real data: **61% / 70% / 68% / 59%** at CFG 1 / 2 / 3 / 5 (chance = 25%). Circles and squares are good; thin triangles and crosses need more capacity (patch size 2, a wider model, a GPU) |
 
-A real bug was caught during validation and kept as a lesson. The first world-model run **collapsed**: SIGReg was stuck at 0.40 and probe R² was ≈ 0, while the prediction loss looked perfect (1e-7). See [docs/02 §4](docs/02-world-models.md#4-what-the-code-in-this-repo-teaches).
+<p align="center">
+  <img src="docs/assets/world_model_imagination.png" width="49%" alt="World-model imagination: odd rows real frames, even rows decoded 12-step open-loop predictions"/>
+  <img src="docs/assets/diffusion_trajectory.png" width="49%" alt="Flow-matching sampling trajectory from noise to circle, square, triangle and cross"/>
+</p>
+
+*Left: odd rows are real frames, even rows are the world model's decoded 12-step "imagination" from the first frame and the actions. The last pair shows compounding error at the wall. Right: flow-matching ODE trajectories from noise (t = 1) to data (t = 0) for the four classes.*
+
+Two real problems were caught during validation and kept as lessons:
+1. **The first world-model run collapsed.** SIGReg was stuck at 0.40 and probe R² was ≈ 0, while the prediction loss looked perfect (1e-7). See [docs/02 §4](docs/02-world-models.md#4-what-the-code-in-this-repo-teaches).
+2. **The first diffusion evaluator was invalid.** The probe classifier scored only 43% on *real* data. Always validate an evaluator before trusting its numbers.
 
 ## How to use this knowledge base
 
